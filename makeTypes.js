@@ -75,22 +75,28 @@ var extractModelNameFromRef = function(ref) {
 
 // returns the string type for the given schema;
 var jsonSchemaToFlowObject = function(schema, possibleImports) {
+  var typeFn, result;
+
   // return ref if it's used and ok
   if ('$ref' in schema && isModelRef(schema.$ref)) {
     var modelName = extractModelNameFromRef(schema.$ref);
     if (_(possibleImports).contains(modelName)) {
-      return modelName;
+      result = modelName;
     } else {
-      console.log('invalid schema:' + JSON.stringify(schema), 'no such type available: ' + schema.$ref);
-      return 'any';
+      throw new Error('invalid schema:' + JSON.stringify(schema), 'no such type available: ' + schema.$ref);
     }
   }
-  // otherwise serialize type
-  if (!jsonSchemaTypeMap[schema.type]) {
-    console.log('invalid schema:' + JSON.stringify(schema));
+
+  // otherwise serialize type. Default to object if schema.type is not specified.
+  else if ((typeFn = jsonSchemaTypeMap[schema.type || 'object'])) {
+    result = typeFn(schema, possibleImports);
   }
 
-  return jsonSchemaTypeMap[schema.type](schema, possibleImports);
+  else {
+    throw new Error('invalid schema:' + JSON.stringify(schema));
+  }
+
+  return result;
 };
 
 var outputAPI = function(modelSets) {
@@ -178,6 +184,8 @@ if (options.help) {
   console.log(usage);
 } else {
   get(options.swaggerUrl, function (data) {
-    getAPIModels(data).then(outputAPI);
+    getAPIModels(data).then(outputAPI).catch(function(err) {
+      console.error(err);
+    });
   });
 }
